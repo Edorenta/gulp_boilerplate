@@ -27,9 +27,33 @@ const AUTOPREFIXER_BROWSERS = [
   'bb >= 10'
 ];
 
+const _e = { // filesystem tasks extensions hierarchy >> regex style
+  _scripts : "js",
+  _tpl : "html|php",
+  _img : "png|jpg|gif|svg",
+  _styles : "sass|scss|sass",
+  _dt : "xml|json|txt|csv|dat",
+  _fonts : "woff|woff2|otf|ttf|eot",
+  scripts() { return ('.+(' + this._scripts + ')'); },
+  tpl() { return ('.+(' + this._tpl + ')'); },
+  img() { return ('.+(' + this._img + ')'); },
+  styles() { return ('.+(' + this._styles + ')'); },
+  dt() { return ('.+(' + this._dt + ')'); },
+  fonts() { return ('.+(' + this._fonts + ')'); },
+  assets() { return ('.+(' + this._img + '|' + this._fonts + '|' + this._dt + ')'); },
+  all() {
+    for (let i in this) {
+      if (i[0] == "_" && this.hasOwnProperty(i) && i != "_all" && i != "_assets") {
+        this._all = this._all ? this._all += "|" + this[i] : this[i];
+      }
+    }
+    return ('.+(' + this._all + ')');
+  }
+}
+
 gulp.task('min:php:templates', function(cb){
 	pump([
-  		gulp.src('src/php/page-templates/*.+(php|html)'), // can do list ['src/*.html','src/*.php'])
+  		gulp.src('src/php/page-templates/*' + _e.tpl()), // can do list ['src/*.html','src/*' + _e.tpl()])
       	htmlmin({
         	collapseWhitespace: true,
           removeComments: true,
@@ -40,9 +64,22 @@ gulp.task('min:php:templates', function(cb){
     ], cb);
 });
 
-gulp.task('min:php', function(cb){
+gulp.task('min:php:index', function(cb){
   pump([
-      gulp.src('src/php/*.+(php|html)'), // can do list ['src/*.html','src/*.php'])
+      gulp.src('src/php/index' + _e.tpl()), // can do list ['src/*.html','src/*' + _e.tpl()])
+        htmlmin({
+          collapseWhitespace: true,
+          removeComments: true,
+          ignoreCustomFragments: [ /<%[\s\S]*?%>/, /<\?[=|php]?[\s\S]*?\?>/ ]
+        }),
+      gulp.dest('./'),
+      size()
+    ], cb);
+});
+
+gulp.task('min:php:partials', function(cb){
+  pump([
+      gulp.src('src/php/partials/*' + _e.tpl()), // can do list ['src/*.html','src/*' + _e.tpl()])
         htmlmin({
           collapseWhitespace: true,
           removeComments: true,
@@ -55,7 +92,7 @@ gulp.task('min:php', function(cb){
 
 gulp.task('min:css', function(cb){
 	pump([
-		gulp.src('src/sass/styles.scss'), // include all sass recursively??
+		gulp.src('src/sass/styles' + _e.styles()), // include all sass recursively??
 			sass({ // Compile SASS files
 			outputStyle: 'nested',
 			precision: 10,
@@ -71,7 +108,7 @@ gulp.task('min:css', function(cb){
 
 gulp.task('min:js', function(cb) {
 	pump([
-  		gulp.src('src/js/**/*.js'),
+  		gulp.src('src/js/**/*' + _e.scripts()),
       babel({
         presets: ['@babel/env'] //make backward compatible (automatic preset-env)
       }),
@@ -83,7 +120,7 @@ gulp.task('min:js', function(cb) {
 
 gulp.task('min:img', function(cb){
 	pump([
-		gulp.src('src/assets/img/**/*.+(png|jpg|gif|svg)'),
+		gulp.src('src/assets/img/**/*' + _e.img()),
 		// imagemin(), // very slow >> need to be cached not to run every time
     cache(imagemin({
       interlaced: true,
@@ -98,21 +135,60 @@ gulp.task('min:img', function(cb){
 
 gulp.task('mv:fonts', function (cb) {
 	pump([
-    	gulp.src('src/assets/fonts/*'),
+    	gulp.src('src/assets/fonts/*' + _e.fonts()),
       gulp.dest('dist/assets/fonts'),
       size()
   ], cb);
 });
 
-gulp.task('watch', function(){
+gulp.task('mv:data', function (cb) {
+  pump([
+      gulp.src('src/assets/data/*' + _e.dt()),
+      gulp.dest('dist/assets/data'),
+      size()
+  ], cb);
+});
+
+gulp.task('watch:php', function(){
     livereload.listen();
-    gulp.watch('src/sass/**/*.scss', gulp.series('min:css'));
-    gulp.watch('src/js/**/*.js', gulp.series('min:js'));
-    gulp.watch('src/php/page-templates/*.php', gulp.series('min:php:templates'));
-    gulp.watch('src/php/*.php', gulp.series('min:php'));
+    gulp.watch('src/php/page-templates/*' + _e.tpl(), gulp.series('min:php:templates'));
+    gulp.watch('src/php/partials/*' + _e.tpl(), gulp.series('min:php:partials'));
+    gulp.watch('src/php/index' + _e.tpl(), gulp.series('min:php:index'));
+    gulp.watch(['dist/**/*' + _e.tpl(), 'page-templates/*' + _e.tpl()], function (files){
+        livereload.changed(files)
+    });
+});
+
+gulp.task('watch:assets', function(){
+    livereload.listen();
+    gulp.watch('src/assets/fonts/*' + _e.fonts(), gulp.series('mv:fonts'));
+    gulp.watch('src/assets/img/*' + _e.img(), gulp.series('min:img'));
+    gulp.watch('src/assets/data/*' + _e.data(), gulp.series('mv:data'));
+    gulp.watch(['dist/**/*' + _e.assets()], function (files){
+        livereload.changed(files)
+    });
+});
+
+gulp.task('watch:php', function(){
+    livereload.listen();
+    gulp.watch('src/php/page-templates/*' + _e.tpl(), gulp.series('min:php:templates'));
+    gulp.watch('src/php/partials/*' + _e.tpl(), gulp.series('min:php:partials'));
+    gulp.watch('src/php/index' + _e.tpl(), gulp.series('min:php:index'));
+    gulp.watch(['dist/**/*' + _e.tpl(), 'page-templates/*' + _e.tpl()], function (files){
+        livereload.changed(files)
+    });
+});
+
+gulp.task('watch:all', function(){
+    livereload.listen();
+    gulp.watch('src/sass/**/*' + _e.styles(), gulp.series('min:css'));
+    gulp.watch('src/js/**/*' + _e.scripts(), gulp.series('min:js'));
+    gulp.watch('src/php/page-templates/*' + _e.tpl(), gulp.series('min:php:templates'));
+    gulp.watch('src/php/partials/*' + _e.tpl(), gulp.series('min:php:partials'));
+    gulp.watch('src/php/index' + _e.tpl(), gulp.series('min:php:index'));
     gulp.watch('src/assets/fonts/*', gulp.series('mv:fonts'));
     gulp.watch('src/assets/img/*', gulp.series('min:img'));
-    gulp.watch(['dist/**/*.+(php|html|js|css|png|jpg|gif|svg|xml|json|csv)', 'page-templates/*.+(php|html)'], function (files){
+    gulp.watch(['dist/**/*' + _e.all(), 'page-templates/*' + _e.tpl()], function (files){
         livereload.changed(files)
     });
 });
@@ -123,18 +199,20 @@ gulp.task('clean:js', () => del(['dist/js']));
 gulp.task('clean:css', () => del(['dist/css']));
 gulp.task('clean:html', () => del(['dist/php']));
 gulp.task('clean:templates', () => del(['page-templates']));
-gulp.task('clean:all', gulp.series('clean:dist','clean:templates'));// can use gulp.parallel
+gulp.task('clean:all', gulp.parallel('clean:dist','clean:templates'));// can use gulp.parallel
 
 gulp.task('build:dev',
   gulp.series(
     'clean:all',
     'min:php:templates',
-    'min:php',
-    'min:css',
+    'min:php:partials',
+    'min:php:index',
+    'min:css', // templates / partials / styles.css all in one
     'min:js',
     'min:img',
+    'mv:data',
     'mv:fonts'
   )
 );
 
-gulp.task('default', gulp.series('build:dev', 'watch'));
+gulp.task('default', gulp.series('build:dev', 'watch:all'));
