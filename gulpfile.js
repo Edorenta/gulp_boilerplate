@@ -3,7 +3,6 @@
 var del = require('del');
 var pump = require('pump');
 var gulp = require('gulp');
-var runSequence = require('run-sequence');
 var babel = require('gulp-babel'); // could use gulp-babel-minify instead
 var sass = require('gulp-sass');
 var csso = require('gulp-csso');
